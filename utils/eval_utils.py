@@ -206,18 +206,70 @@ def get_npy_csv(masks, tp_num, dataset, patch_shape=(256, 256)):
         # ensure nuclei range from 0 to N (N is the number of nuclei in the patch)
         patch_inst = remap_label(patch_inst)
 
-        # only consider nuclei for counting if it exists within the central [patch_shape[0]-50, patch_shape[1]-50] region
-        patch_inst_crop = cropping_center(patch_inst, [patch_shape[0]-50, patch_shape[1]-50])
-        patch_class_crop = cropping_center(patch_class, [patch_shape[0]-50, patch_shape[1]-50])
-        print(f"Region for counted nuclei: {[patch_shape[0]-50, patch_shape[1]-50]}")
-        
-        nuclei_counts_perclass = []
-        # get the counts per class
-        for nuc_val in range(1, n_classes + 1):
-            patch_class_crop_tmp = patch_class_crop == nuc_val
-            patch_inst_crop_tmp = patch_inst_crop * patch_class_crop_tmp
-            nr_nuclei = len(np.unique(patch_inst_crop_tmp).tolist()[1:])
-            nuclei_counts_perclass.append(nr_nuclei)
+        # Count a nucleus only if its centroid lies inside the patch's
+        # ownership region.
+        #
+        # Example:
+        # Patch size: 2048 x 2048
+        # Overlap:    100 px
+        # Ownership:  remove 50 px from each side
+        #
+        # Therefore valid centroid coordinates are:
+        # x: [50, 1998)
+        # y: [50, 1998)
+
+        ownership_border = 50
+
+        height, width = patch_inst.shape
+
+        nuclei_counts_perclass = [0] * n_classes
+
+        # All detected nuclei
+        instance_ids = np.unique(patch_inst)
+
+        for inst_id in instance_ids:
+
+            # Pixels belonging to this nucleus
+            ys, xs = np.where(patch_inst == inst_id)
+
+            if len(xs) == 0:
+                continue
+
+            # Calculate nucleus centroid
+            centroid_x = xs.mean()
+            centroid_y = ys.mean()
+
+            # Only this central region owns the nucleus
+            if not (
+                ownership_border <= centroid_x < width - ownership_border
+                and
+                ownership_border <= centroid_y < height - ownership_border
+            ):
+                continue
+
+            # Get the class of this nucleus.
+            # Use majority class across all pixels belonging to the nucleus.
+            nucleus_classes = patch_class[ys, xs].astype(np.int32)
+
+            # Ignore background / invalid class values
+            nucleus_classes = nucleus_classes[
+                (nucleus_classes >= 1) &
+                (nucleus_classes <= n_classes)
+            ]
+
+            if len(nucleus_classes) == 0:
+                continue
+
+            # Majority class
+            class_counts = np.bincount(
+                nucleus_classes,
+                minlength=n_classes + 1
+            )
+
+            nucleus_class = np.argmax(class_counts[1:]) + 1
+
+            # Count this nucleus exactly once
+            nuclei_counts_perclass[nucleus_class - 1] += 1
 
         if patch_inst.shape[0] != patch_shape[0]:
             patch_inst = cropping_center(patch_inst, patch_shape)
