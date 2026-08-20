@@ -186,7 +186,7 @@ def visualize(imgs, ann, pred, output_dir, dataset, nuclei_marker):
     if dataset=="conic":
         print(f"Dataset in visualize: {dataset}")
         # BGR values used in color
-        colors = [[0  ,   0,   255], [0,   0,   0], [255  ,   255, 0], 
+        colors = [[0  ,   0,   255], [255, 100, 50], [255  ,   255, 0], 
                 [255 ,   0, 0], [255, 0,   255], [0, 255,   0], [0, 255, 255]]
         # color order nuclei: nolable (red), neutrphil (black), epithelial (cyan), lymphocyte (dark blue), plasma (magenta), eosinophil (green), connective (yellow)
 
@@ -231,9 +231,8 @@ def visualize_no_gt(imgs, imgs_names, pred, output_dir, dataset, nuclei_marker):
         # colors = [[0  ,   0,   255], [0,   0,   0], [255  ,   255, 0], 
         #         [255 ,   0, 0], [255, 0,   255], [0, 255,   0], [0, 255, 255]]
         # # color order nuclei: nolable (red), neutrophil (black), epithelial (cyan), lymphocyte (dark blue), plasma (magenta), eosinophil (green), connective (yellow)
-        colors = [[0,   0,   0], [0, 0,   255], 
-                [255, 0,   255], [255 ,   0, 0], [0, 255,   0], [0, 255, 255]]
-        # color order nuclei: neutrophil (black), epithelial (red), lymphocyte (magenta), plasma (dark blue), eosinophil (green), connective (yellow)
+        colors = [[0, 128, 255], [0, 0,   255], [255 ,   0, 0], [255, 0,   255], [0, 100,   0], [0, 255, 255]]
+        # color order nuclei: neutrophil (orange), epithelial (red), lymphocyte (dark blue), plasma (magenta), eosinophil (dark green), connective (yellow)
        
     elif dataset=="pannuke":
         print(f"Dataset in visualize: {dataset}")
@@ -243,7 +242,7 @@ def visualize_no_gt(imgs, imgs_names, pred, output_dir, dataset, nuclei_marker):
         # # color order nuclei: nolable (red), neoplastic (light blue), inflammatory (green), connective (yellow), dead (grey?), epithelial (cyan)
         colors = [[255  ,   200, 0], [0, 255,   0], 
                 [0, 255, 255], [127, 127,   127], [0, 0,   255]]
-        # color order nuclei: neoplastic (light blue), inflammatory (green), connective (yellow), dead (grey?), epithelial (red)
+        # color order nuclei: neoplastic (light blue), inflammatory (green), connective (yellow), dead (grey), epithelial (red)
     
     os.makedirs(output_dir, exist_ok=True)
     pixel_count_list = []
