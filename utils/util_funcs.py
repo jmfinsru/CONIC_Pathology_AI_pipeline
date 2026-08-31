@@ -179,6 +179,190 @@ def draw_dilation_monusac(img, instance_mask):
         img_overlay[indexes] = img[indexes]
     return img_overlay
 
+def save_binary_nuclei_type_maps(
+    mask_pred,
+    img_name,
+    output_dir,
+    dataset="conic",
+):
+    """
+    Save one binary mask per nucleus type.
+
+    mask_pred[..., 0] = nucleus instance map
+    mask_pred[..., 1] = nucleus class/type map
+
+    Output:
+        white (255) = pixels belonging to that nucleus type
+        black (0)   = everything else
+    """
+
+    if dataset == "conic":
+        class_names = {
+            1: "neutrophil",
+            2: "epithelial",
+            3: "lymphocyte",
+            4: "plasma",
+            5: "eosinophil",
+            6: "connective",
+        }
+
+    elif dataset == "pannuke":
+        class_names = {
+            1: "neoplastic",
+            2: "inflammatory",
+            3: "connective",
+            4: "dead",
+            5: "epithelial",
+        }
+
+    else:
+        raise ValueError(f"Unknown dataset: {dataset}")
+
+    # Post-processed instance and class maps
+    instance_map = mask_pred[..., 0]
+    type_map = mask_pred[..., 1]
+
+    # Root directory for the binary class masks
+    binary_root = os.path.join(output_dir, "binary_by_type")
+    os.makedirs(binary_root, exist_ok=True)
+
+    for class_id, class_name in class_names.items():
+
+        # Directory for this nucleus type
+        class_dir = os.path.join(binary_root, class_name)
+        os.makedirs(class_dir, exist_ok=True)
+
+        # Binary mask:
+        # 255 = nucleus belonging to this class
+        # 0   = everything else
+        class_binary = (
+            (instance_map > 0) &
+            (type_map == class_id)
+        ).astype(np.uint8) * 255
+
+        output_path = os.path.join(
+            class_dir,
+            f"{class_name}_{img_name}"
+        )
+
+        cv2.imwrite(output_path, class_binary)
+def save_np_maps(
+    np_pred,
+    img_name,
+    output_dir,
+    target_shape=None,
+):
+    """
+    Save the HoVer-Net nuclear-pixel (NP) prediction.
+
+    Outputs:
+        np_probability_npy:
+            Raw floating-point NP probability map.
+
+        np_probability_png:
+            Grayscale visualization:
+            0   = background probability
+            255 = nucleus probability
+
+        np_binary:
+            Binary NP map using threshold >= 0.5.
+            0   = background
+            255 = predicted nuclear pixel
+    """
+
+    # Remove singleton dimensions, e.g. H x W x 1 -> H x W
+    np_probability = np.squeeze(np_pred).astype(np.float32)
+
+    # ------------------------------------------------------
+    # Create directories
+    # ------------------------------------------------------
+
+    np_npy_dir = os.path.join(
+        output_dir,
+        "np_probability_npy"
+    )
+
+    np_png_dir = os.path.join(
+        output_dir,
+        "np_probability_png"
+    )
+
+    np_binary_dir = os.path.join(
+        output_dir,
+        "np_binary"
+    )
+
+    os.makedirs(np_npy_dir, exist_ok=True)
+    os.makedirs(np_png_dir, exist_ok=True)
+    os.makedirs(np_binary_dir, exist_ok=True)
+
+    # ------------------------------------------------------
+    # Save RAW probability map
+    # ------------------------------------------------------
+
+    base_name = os.path.splitext(img_name)[0]
+
+    np.save(
+        os.path.join(
+            np_npy_dir,
+            f"np_probability_{base_name}.npy"
+        ),
+        np_probability
+    )
+
+    # ------------------------------------------------------
+    # Resize for PNG output if necessary
+    # ------------------------------------------------------
+
+    np_probability_vis = np_probability
+
+    if target_shape is not None:
+
+        height, width = target_shape
+
+        if np_probability.shape != (height, width):
+
+            np_probability_vis = cv2.resize(
+                np_probability,
+                (width, height),
+                interpolation=cv2.INTER_LINEAR
+            )
+
+    # ------------------------------------------------------
+    # Grayscale probability PNG
+    # ------------------------------------------------------
+
+    np_probability_png = np.clip(
+        np_probability_vis * 255.0,
+        0,
+        255
+    ).astype(np.uint8)
+
+    cv2.imwrite(
+        os.path.join(
+            np_png_dir,
+            f"np_probability_{img_name}"
+        ),
+        np_probability_png
+    )
+
+    # ------------------------------------------------------
+    # Binary NP map
+    #
+    # Same 0.5 threshold used by HoVer-Net post-processing
+    # ------------------------------------------------------
+
+    np_binary = (
+        np_probability_vis >= 0.5
+    ).astype(np.uint8) * 255
+
+    cv2.imwrite(
+        os.path.join(
+            np_binary_dir,
+            f"np_binary_{img_name}"
+        ),
+        np_binary
+    )
 
 def visualize(imgs, ann, pred, output_dir, dataset, nuclei_marker):
     
@@ -223,7 +407,15 @@ def visualize(imgs, ann, pred, output_dir, dataset, nuclei_marker):
     # ax.axis('off')  # Hide axis
     # plt.show()
 
-def visualize_no_gt(imgs, imgs_names, pred, output_dir, dataset, nuclei_marker):
+def visualize_no_gt(
+    imgs,
+    imgs_names,
+    pred,
+    output_dir,
+    dataset,
+    nuclei_marker,
+    np_predictions=None
+):
     # Decide colors for visualization of nuclei based on datset used
     if dataset=="conic":
         print(f"Dataset in visualize: {dataset}")
@@ -254,6 +446,24 @@ def visualize_no_gt(imgs, imgs_names, pred, output_dir, dataset, nuclei_marker):
         img_to_write = img_to_write.astype(np.uint8)  # Convert to uint8
         output_path = f"{output_dir}/overlay_{imgs_names[img_idx]}"
         cv2.imwrite(output_path, img_to_write)
+        
+        # Save individual binary mask for every nucleus type
+        save_binary_nuclei_type_maps(
+        mask_pred=mask_pred,
+        img_name=imgs_names[img_idx],
+        output_dir=output_dir,
+        dataset=dataset,
+    )
+        # Save NP nuclear-pixel maps
+        if np_predictions is not None:
+
+            save_np_maps(
+                np_pred=np_predictions[img_idx],
+                img_name=imgs_names[img_idx],
+                output_dir=output_dir,
+                target_shape=mask_pred[:, :, 0].shape,
+            )
+
     # Convert from BGR to RGB if necessary (OpenCV uses BGR by default)
     # img_to_write_rgb = cv2.cvtColor(img_to_write, cv2.COLOR_BGR2RGB)
 

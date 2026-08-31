@@ -103,7 +103,15 @@ def eval_models(imgs_load_array, image_names, tp_num, exp_name0, encoder_name0, 
     nuclei_counts_df_pred.to_csv(output_dir_dataframe, index=False)
     
     #Create and save overlay + extract dataframe with pixel counts for nuclei types
-    pixel_count_df = visualize_no_gt(imgs=imgs_load_array, imgs_names=image_names, pred=labels_array_pred , output_dir=output_dir, dataset=dataset, nuclei_marker=nuclei_marker)
+    pixel_count_df = visualize_no_gt(
+    imgs=imgs_load_array,
+    imgs_names=image_names,
+    pred=labels_array_pred,
+    output_dir=output_dir,
+    dataset=dataset,
+    nuclei_marker=nuclei_marker,
+    np_predictions=np_results,
+)
     pixel_count_df.insert(0, column_name, column_values)
     # Print and save the dataframe
     print(pixel_count_df)
